@@ -43,10 +43,31 @@ class VideoBot(commands.Bot):
         """Called when the bot is ready"""
         logger.info(f'Bot logged in as {self.user} (ID: {self.user.id})')
 
-        # Set activity status
-        activity = discord.Game(name=config.DISCORD_ACTIVITY_NAME)
+        # Set activity status based on type
+        await self.update_activity()
+        logger.info(f'Activity set to: {config.DISCORD_ACTIVITY_TYPE} {config.DISCORD_ACTIVITY_NAME}')
+
+    async def update_activity(self):
+        """Update bot activity based on config"""
+        activity_type = config.DISCORD_ACTIVITY_TYPE
+        activity_name = config.DISCORD_ACTIVITY_NAME
+
+        if activity_type == 'playing':
+            activity = discord.Game(name=activity_name)
+        elif activity_type == 'watching':
+            activity = discord.Activity(type=discord.ActivityType.watching, name=activity_name)
+        elif activity_type == 'listening':
+            activity = discord.Activity(type=discord.ActivityType.listening, name=activity_name)
+        elif activity_type == 'streaming':
+            url = config.DISCORD_ACTIVITY_URL or 'https://twitch.tv/discord'
+            activity = discord.Streaming(name=activity_name, url=url)
+        elif activity_type == 'custom':
+            activity = discord.CustomActivity(name=activity_name)
+        else:
+            # Default to watching
+            activity = discord.Activity(type=discord.ActivityType.watching, name=activity_name)
+
         await self.change_presence(activity=activity)
-        logger.info(f'Activity set to: {config.DISCORD_ACTIVITY_NAME}')
 
 
 # Create bot instance

@@ -60,9 +60,8 @@ class EnvFileHandler(FileSystemEventHandler):
 
             # Update bot activity
             if bot.user:
-                activity = discord.Game(name=config.DISCORD_ACTIVITY_NAME)
-                await bot.change_presence(activity=activity)
-                logger.info(f"✅ Configuration reloaded - Activity: {config.DISCORD_ACTIVITY_NAME}")
+                await bot.update_activity()
+                logger.info(f"✅ Configuration reloaded - Activity: {config.DISCORD_ACTIVITY_TYPE} {config.DISCORD_ACTIVITY_NAME}")
 
             # Update video manager URL
             bot.video_manager.json_url = config.VIDEO_JSON_URL
@@ -108,9 +107,8 @@ async def cloud_env_monitor():
 
                 # Update bot activity
                 if bot.user:
-                    activity = discord.Game(name=config.DISCORD_ACTIVITY_NAME)
-                    await bot.change_presence(activity=activity)
-                    logger.info(f"✅ Bot activity updated: {config.DISCORD_ACTIVITY_NAME}")
+                    await bot.update_activity()
+                    logger.info(f"✅ Bot activity updated: {config.DISCORD_ACTIVITY_TYPE} {config.DISCORD_ACTIVITY_NAME}")
 
                 # Update video manager
                 bot.video_manager.json_url = config.VIDEO_JSON_URL

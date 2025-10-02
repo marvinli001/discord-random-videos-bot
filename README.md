@@ -62,8 +62,24 @@ All settings are managed via environment variables:
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
 | `DISCORD_BOT_TOKEN` | Discord bot token | - | ✅ Yes |
-| `DISCORD_ACTIVITY_NAME` | Bot's activity status | "随机视频" | ❌ No |
+| `DISCORD_ACTIVITY_NAME` | Bot's activity status text | "随机视频" | ❌ No |
+| `DISCORD_ACTIVITY_TYPE` | Activity type (playing/watching/listening/streaming/custom) | "watching" | ❌ No |
+| `DISCORD_ACTIVITY_URL` | URL for streaming activity type | - | ❌ No |
 | `VIDEO_JSON_URL` | JSON source for videos | https://videos.vistru.cn/videos.json | ❌ No |
+
+### Activity Types 🎭
+
+Choose from different Discord activity types:
+
+| Type | Display Format | Example |
+|------|----------------|---------|
+| `playing` | 正在玩 {name} | "正在玩 随机视频" |
+| `watching` | 观看 {name} | "观看 随机视频" ⭐ (default) |
+| `listening` | 收听 {name} | "收听 随机视频" |
+| `streaming` | 直播 {name} | "直播 随机视频" (requires `DISCORD_ACTIVITY_URL`) |
+| `custom` | {name} | "随机视频" (custom status bubble) |
+
+Set `DISCORD_ACTIVITY_TYPE` in your environment variables to change the display format.
 
 ### Hot Reload
 

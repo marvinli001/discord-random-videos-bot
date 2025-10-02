@@ -70,6 +70,12 @@ class VideoManager:
             logger.error(f"Error extracting filename from {url}: {e}")
             return "视频.mp4"
 
+    async def switch_source(self, new_json_url: str) -> bool:
+        """Switch to a different video source"""
+        logger.info(f"Switching video source to: {new_json_url}")
+        self.json_url = new_json_url
+        return await self.fetch_videos()
+
     def get_queue_status(self) -> dict:
         """Get current queue status"""
         return {

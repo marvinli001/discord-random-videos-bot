@@ -65,7 +65,17 @@ All settings are managed via environment variables:
 | `DISCORD_ACTIVITY_NAME` | Bot's activity status text | "随机视频" | ❌ No |
 | `DISCORD_ACTIVITY_TYPE` | Activity type (playing/watching/listening/streaming/custom) | "watching" | ❌ No |
 | `DISCORD_ACTIVITY_URL` | URL for streaming activity type | - | ❌ No |
-| `VIDEO_JSON_URL` | JSON source for videos | https://videos.vistru.cn/videos.json | ❌ No |
+| `VIDEO_JSON_URL` | Default video source JSON URL | https://videos.vistru.cn/videos.json | ❌ No |
+| `STREAMABLE_JSON_URL` | Streamable video source JSON URL (for PC compatibility) | https://videos.vistru.cn/streamable.json | ❌ No |
+
+### Video Sources 🎬
+
+The bot supports multiple video sources that can be switched dynamically:
+
+- **默认源 (Default Source)**: Main video collection from `VIDEO_JSON_URL`
+- **Streamable源 (Streamable Source)**: PC-optimized videos from `STREAMABLE_JSON_URL`
+
+Users can switch between sources using the "换源" button in the Discord interface.
 
 ### Activity Types 🎭
 
@@ -109,9 +119,13 @@ The bot automatically detects configuration changes without restarting:
 2. Bot sends message with:
    - Video filename (decoded from URL)
    - Embedded video player (Discord native)
-   - "下一个" (Next) button
-3. Click "Next" button to load another random video
-4. Message updates in-place with new video
+   - "下一个 ⏭️" (Next) button
+   - "换源 🔄" (Switch Source) button
+3. Click "Next" button to load another random video from current source
+4. Click "Switch Source" button to choose between:
+   - **默认源 📹** - Default video source (VIDEO_JSON_URL)
+   - **Streamable源 💻** - Streamable source for PC compatibility (STREAMABLE_JSON_URL)
+5. Message updates in-place with new video
 
 ## Project Structure 📁
 

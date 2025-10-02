@@ -127,18 +127,19 @@ def create_video_message(video_url: str) -> str:
 
 
 class VideoView(discord.ui.View):
-    """View with Next button for getting another random video"""
+    """View with Next and Source Switch buttons"""
 
-    def __init__(self, current_video_url: str):
+    def __init__(self, current_video_url: str, current_source: str = "default"):
         super().__init__(timeout=None)  # No timeout
         self.current_video_url = current_video_url
+        self.current_source = current_source  # "default" or "streamable"
 
     @discord.ui.button(label="下一个", style=discord.ButtonStyle.primary, emoji="⏭️")
     async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Handle next button click"""
         await interaction.response.defer()
 
-        # Get next video
+        # Get next video from current source
         video_url = bot.video_manager.get_next_video()
 
         if not video_url:
@@ -149,8 +150,8 @@ class VideoView(discord.ui.View):
         self.current_video_url = video_url
         content = create_video_message(video_url)
 
-        # Create new view with updated video
-        new_view = VideoView(video_url)
+        # Create new view with updated video and same source
+        new_view = VideoView(video_url, self.current_source)
 
         try:
             # Edit the original message
@@ -158,6 +159,77 @@ class VideoView(discord.ui.View):
         except Exception as e:
             logger.error(f"Failed to update message: {e}")
             await interaction.followup.send("❌ 更新失败", ephemeral=True)
+
+    @discord.ui.button(label="换源", style=discord.ButtonStyle.secondary, emoji="🔄")
+    async def switch_source_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Handle source switch button click - show source selection"""
+        await interaction.response.defer()
+
+        # Create source selection view
+        source_view = SourceSelectionView(self.current_video_url, self.current_source)
+
+        try:
+            # Edit to show source selection buttons
+            content = create_video_message(self.current_video_url)
+            await interaction.message.edit(content=content, view=source_view)
+        except Exception as e:
+            logger.error(f"Failed to show source selection: {e}")
+            await interaction.followup.send("❌ 切换失败", ephemeral=True)
+
+
+class SourceSelectionView(discord.ui.View):
+    """View for selecting video source"""
+
+    def __init__(self, current_video_url: str, current_source: str):
+        super().__init__(timeout=None)
+        self.current_video_url = current_video_url
+        self.current_source = current_source
+
+    @discord.ui.button(label="默认源", style=discord.ButtonStyle.success, emoji="📹")
+    async def default_source_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Switch to default source"""
+        await interaction.response.defer()
+
+        # Switch to default source
+        await bot.video_manager.switch_source(config.VIDEO_JSON_URL)
+        video_url = bot.video_manager.get_next_video()
+
+        if not video_url:
+            await interaction.followup.send("❌ 无法获取视频", ephemeral=True)
+            return
+
+        content = create_video_message(video_url)
+        new_view = VideoView(video_url, "default")
+
+        try:
+            await interaction.message.edit(content=content, view=new_view)
+            await interaction.followup.send("✅ 已切换到默认源", ephemeral=True)
+        except Exception as e:
+            logger.error(f"Failed to switch source: {e}")
+            await interaction.followup.send("❌ 切换失败", ephemeral=True)
+
+    @discord.ui.button(label="Streamable源", style=discord.ButtonStyle.success, emoji="💻")
+    async def streamable_source_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Switch to Streamable source"""
+        await interaction.response.defer()
+
+        # Switch to streamable source
+        await bot.video_manager.switch_source(config.STREAMABLE_JSON_URL)
+        video_url = bot.video_manager.get_next_video()
+
+        if not video_url:
+            await interaction.followup.send("❌ 无法获取视频", ephemeral=True)
+            return
+
+        content = create_video_message(video_url)
+        new_view = VideoView(video_url, "streamable")
+
+        try:
+            await interaction.message.edit(content=content, view=new_view)
+            await interaction.followup.send("✅ 已切换到 Streamable 源", ephemeral=True)
+        except Exception as e:
+            logger.error(f"Failed to switch source: {e}")
+            await interaction.followup.send("❌ 切换失败", ephemeral=True)
 
 
 @bot.event

@@ -94,8 +94,11 @@ async def send_random_video(interaction_or_ctx):
     if is_interaction:
         await interaction_or_ctx.response.defer()
 
-    # Get next video
-    video_url = bot.video_manager.get_next_video()
+    # Get user ID
+    user_id = interaction_or_ctx.user.id if is_interaction else interaction_or_ctx.author.id
+
+    # Get next video for this user
+    video_url = bot.video_manager.get_next_video(user_id)
 
     if not video_url:
         error_msg = "❌ 无法获取视频，请稍后重试"
@@ -106,7 +109,7 @@ async def send_random_video(interaction_or_ctx):
         return
 
     # Create message with video and button
-    view = VideoView(video_url)
+    view = VideoView(video_url, user_id)
     content = create_video_message(video_url)
 
     if is_interaction:
@@ -129,9 +132,10 @@ def create_video_message(video_url: str) -> str:
 class VideoView(discord.ui.View):
     """View with Next and Source Switch buttons"""
 
-    def __init__(self, current_video_url: str, current_source: str = "default"):
+    def __init__(self, current_video_url: str, user_id: int, current_source: str = "default"):
         super().__init__(timeout=None)  # No timeout
         self.current_video_url = current_video_url
+        self.user_id = user_id
         self.current_source = current_source  # "default" or "streamable"
 
     @discord.ui.button(label="下一个", style=discord.ButtonStyle.primary, emoji="⏭️")
@@ -139,8 +143,13 @@ class VideoView(discord.ui.View):
         """Handle next button click"""
         await interaction.response.defer()
 
-        # Get next video from current source
-        video_url = bot.video_manager.get_next_video()
+        # Only allow the original user to use the button
+        if interaction.user.id != self.user_id:
+            await interaction.followup.send("❌ 这不是你的视频卡片，请使用 /randomvideo 获取自己的视频", ephemeral=True)
+            return
+
+        # Get next video for this user
+        video_url = bot.video_manager.get_next_video(self.user_id)
 
         if not video_url:
             await interaction.followup.send("❌ 无法获取视频", ephemeral=True)
@@ -151,7 +160,7 @@ class VideoView(discord.ui.View):
         content = create_video_message(video_url)
 
         # Create new view with updated video and same source
-        new_view = VideoView(video_url, self.current_source)
+        new_view = VideoView(video_url, self.user_id, self.current_source)
 
         try:
             # Edit the original message
@@ -165,8 +174,13 @@ class VideoView(discord.ui.View):
         """Handle source switch button click - show source selection"""
         await interaction.response.defer()
 
+        # Only allow the original user to use the button
+        if interaction.user.id != self.user_id:
+            await interaction.followup.send("❌ 这不是你的视频卡片，请使用 /randomvideo 获取自己的视频", ephemeral=True)
+            return
+
         # Create source selection view
-        source_view = SourceSelectionView(self.current_video_url, self.current_source)
+        source_view = SourceSelectionView(self.current_video_url, self.user_id, self.current_source)
 
         try:
             # Edit to show source selection buttons
@@ -180,9 +194,10 @@ class VideoView(discord.ui.View):
 class SourceSelectionView(discord.ui.View):
     """View for selecting video source"""
 
-    def __init__(self, current_video_url: str, current_source: str):
+    def __init__(self, current_video_url: str, user_id: int, current_source: str):
         super().__init__(timeout=None)
         self.current_video_url = current_video_url
+        self.user_id = user_id
         self.current_source = current_source
 
     @discord.ui.button(label="默认源", style=discord.ButtonStyle.success, emoji="📹")
@@ -190,16 +205,21 @@ class SourceSelectionView(discord.ui.View):
         """Switch to default source"""
         await interaction.response.defer()
 
+        # Only allow the original user
+        if interaction.user.id != self.user_id:
+            await interaction.followup.send("❌ 这不是你的视频卡片", ephemeral=True)
+            return
+
         # Switch to default source
         await bot.video_manager.switch_source(config.VIDEO_JSON_URL)
-        video_url = bot.video_manager.get_next_video()
+        video_url = bot.video_manager.get_next_video(self.user_id)
 
         if not video_url:
             await interaction.followup.send("❌ 无法获取视频", ephemeral=True)
             return
 
         content = create_video_message(video_url)
-        new_view = VideoView(video_url, "default")
+        new_view = VideoView(video_url, self.user_id, "default")
 
         try:
             await interaction.message.edit(content=content, view=new_view)
@@ -213,16 +233,21 @@ class SourceSelectionView(discord.ui.View):
         """Switch to Streamable source"""
         await interaction.response.defer()
 
+        # Only allow the original user
+        if interaction.user.id != self.user_id:
+            await interaction.followup.send("❌ 这不是你的视频卡片", ephemeral=True)
+            return
+
         # Switch to streamable source
         await bot.video_manager.switch_source(config.STREAMABLE_JSON_URL)
-        video_url = bot.video_manager.get_next_video()
+        video_url = bot.video_manager.get_next_video(self.user_id)
 
         if not video_url:
             await interaction.followup.send("❌ 无法获取视频", ephemeral=True)
             return
 
         content = create_video_message(video_url)
-        new_view = VideoView(video_url, "streamable")
+        new_view = VideoView(video_url, self.user_id, "streamable")
 
         try:
             await interaction.message.edit(content=content, view=new_view)

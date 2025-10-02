@@ -16,10 +16,12 @@ A Discord bot that sends random videos from a JSON source with intelligent shuff
 ## How It Works 🔧
 
 1. **Video Queue**: Fetches video list from JSON URL and creates a shuffled queue
-2. **No Repeats**: Ensures all videos play once before any video repeats
-3. **Dynamic Cards**: Sends interactive messages with video embeds and "Next" button
-4. **In-Place Updates**: Clicking "Next" updates the current message (no spam)
-5. **Discord Embeds**: Discord automatically creates video player from direct URLs
+2. **Per-User Queues**: Each user has their own independent shuffle queue tracked by Discord user ID
+3. **No Repeats**: Ensures all videos play once before any video repeats (per user)
+4. **Dynamic Cards**: Sends interactive messages with video embeds and "Next" button
+5. **In-Place Updates**: Clicking "Next" updates the current message (no spam)
+6. **Button Protection**: Only the card owner can use the buttons
+7. **Discord Embeds**: Discord automatically creates video player from direct URLs
 
 ## Setup 🚀
 
@@ -143,18 +145,20 @@ discord-random-videos-bot/
 
 ## Technical Details 🛠️
 
-### Shuffle Queue Algorithm
+### Per-User Shuffle Queue Algorithm
 
 1. Fetch all videos from JSON
-2. Create shuffled queue from complete list
-3. Serve videos sequentially from queue
-4. When queue exhausted, create new shuffled queue
-5. Repeat indefinitely
+2. **Create separate shuffled queue for each user (by Discord user ID)**
+3. Serve videos sequentially from user's personal queue
+4. When user's queue exhausted, create new shuffled queue for that user
+5. Repeat indefinitely per user
 
 This ensures:
-- ✅ All videos played before any repeat
+- ✅ Each user has independent playback progress
+- ✅ All videos played before any repeat (per user)
 - ✅ True randomness in each round
-- ✅ No manual tracking needed
+- ✅ Works in both DMs and group channels
+- ✅ No interference between different users
 
 ### Discord Integration
 

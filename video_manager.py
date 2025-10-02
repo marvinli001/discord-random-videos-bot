@@ -1,20 +1,29 @@
 import random
 import aiohttp
 import logging
-from typing import List, Optional
+from typing import List, Optional, Dict
 from urllib.parse import unquote
 
 logger = logging.getLogger(__name__)
 
 
+class UserQueue:
+    """Individual user's video queue"""
+
+    def __init__(self, all_videos: List[str]):
+        self.queue: List[str] = all_videos.copy()
+        random.shuffle(self.queue)
+        self.current_index = 0
+        logger.debug(f"Created new user queue with {len(self.queue)} videos")
+
+
 class VideoManager:
-    """Manages video queue with shuffle logic - ensures all videos play before repeating"""
+    """Manages video queues per user - ensures all videos play before repeating for each user"""
 
     def __init__(self, json_url: str):
         self.json_url = json_url
         self.all_videos: List[str] = []
-        self.queue: List[str] = []
-        self.current_index = 0
+        self.user_queues: Dict[int, UserQueue] = {}  # user_id -> UserQueue
 
     async def fetch_videos(self) -> bool:
         """Fetch videos from JSON URL"""
@@ -24,7 +33,8 @@ class VideoManager:
                     if response.status == 200:
                         self.all_videos = await response.json()
                         logger.info(f"Fetched {len(self.all_videos)} videos from {self.json_url}")
-                        self._shuffle_queue()
+                        # Clear existing user queues when source changes
+                        self.user_queues.clear()
                         return True
                     else:
                         logger.error(f"Failed to fetch videos: HTTP {response.status}")
@@ -33,28 +43,32 @@ class VideoManager:
             logger.error(f"Error fetching videos: {e}")
             return False
 
-    def _shuffle_queue(self):
-        """Create a new shuffled queue from all videos"""
-        self.queue = self.all_videos.copy()
-        random.shuffle(self.queue)
-        self.current_index = 0
-        logger.info(f"Shuffled queue with {len(self.queue)} videos")
+    def _get_user_queue(self, user_id: int) -> UserQueue:
+        """Get or create a user's queue"""
+        if user_id not in self.user_queues:
+            logger.info(f"Creating new queue for user {user_id}")
+            self.user_queues[user_id] = UserQueue(self.all_videos)
+        return self.user_queues[user_id]
 
-    def get_next_video(self) -> Optional[str]:
-        """Get next video from queue, reshuffle when queue is exhausted"""
-        if not self.queue:
-            logger.warning("No videos available in queue")
+    def get_next_video(self, user_id: int) -> Optional[str]:
+        """Get next video from user's queue, reshuffle when queue is exhausted"""
+        if not self.all_videos:
+            logger.warning("No videos available")
             return None
 
-        # If we've played all videos, start a new round
-        if self.current_index >= len(self.queue):
-            logger.info("Queue exhausted, starting new shuffle round")
-            self._shuffle_queue()
+        user_queue = self._get_user_queue(user_id)
 
-        video_url = self.queue[self.current_index]
-        self.current_index += 1
+        # If user has played all videos, start a new round
+        if user_queue.current_index >= len(user_queue.queue):
+            logger.info(f"User {user_id} queue exhausted, starting new shuffle round")
+            user_queue.queue = self.all_videos.copy()
+            random.shuffle(user_queue.queue)
+            user_queue.current_index = 0
 
-        logger.debug(f"Next video ({self.current_index}/{len(self.queue)}): {video_url}")
+        video_url = user_queue.queue[user_queue.current_index]
+        user_queue.current_index += 1
+
+        logger.debug(f"User {user_id} - Next video ({user_queue.current_index}/{len(user_queue.queue)}): {video_url}")
         return video_url
 
     @staticmethod
@@ -76,11 +90,20 @@ class VideoManager:
         self.json_url = new_json_url
         return await self.fetch_videos()
 
-    def get_queue_status(self) -> dict:
-        """Get current queue status"""
+    def get_queue_status(self, user_id: int) -> dict:
+        """Get user's queue status"""
+        if user_id not in self.user_queues:
+            return {
+                "total_videos": len(self.all_videos),
+                "queue_size": 0,
+                "current_position": 0,
+                "videos_remaining": len(self.all_videos)
+            }
+
+        user_queue = self.user_queues[user_id]
         return {
             "total_videos": len(self.all_videos),
-            "queue_size": len(self.queue),
-            "current_position": self.current_index,
-            "videos_remaining": len(self.queue) - self.current_index
+            "queue_size": len(user_queue.queue),
+            "current_position": user_queue.current_index,
+            "videos_remaining": len(user_queue.queue) - user_queue.current_index
         }

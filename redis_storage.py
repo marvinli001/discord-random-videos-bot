@@ -21,17 +21,17 @@ class RedisStorage:
     def _connect(self):
         """Connect to Redis using Railway-provided environment variables"""
         try:
-            # Railway provides multiple possible Redis URL variables
-            # Try in order of preference: private URL (internal), public URL, or REDIS_URL
+            # Railway provides REDIS_URL with full connection string
+            # Format: redis://default:password@host:port
+            # Try in order: REDIS_URL (full URL) > REDIS_PUBLIC_URL > individual vars
             redis_url = (
-                os.getenv('REDIS_PRIVATE_URL') or  # Railway internal network
-                os.getenv('REDIS_URL') or           # Generic Redis URL
+                os.getenv('REDIS_URL') or           # Full Redis URL (recommended)
                 os.getenv('REDIS_PUBLIC_URL')       # Public URL fallback
             )
 
             if redis_url:
                 # Use Redis URL if available
-                logger.info(f"Connecting to Redis via URL...")
+                logger.info(f"Connecting to Redis via URL: {redis_url[:20]}...")
                 self.redis_client = redis.from_url(
                     redis_url,
                     decode_responses=True,

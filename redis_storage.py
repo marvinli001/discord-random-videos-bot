@@ -71,48 +71,58 @@ class RedisStorage:
             self.redis_client = None
             self.available = False
 
-    def save_user_queue(self, user_id: int, queue: List[str]) -> bool:
-        """Save user's shuffle queue to Redis"""
+    def _get_source_key(self, source_url: str) -> str:
+        """Generate a short key from source URL"""
+        import hashlib
+        # Use hash to shorten URL for Redis key
+        url_hash = hashlib.md5(source_url.encode()).hexdigest()[:8]
+        return url_hash
+
+    def save_user_queue(self, user_id: int, queue: Dict, source_url: str) -> bool:
+        """Save user's shuffle queue for specific source to Redis"""
         if not self.available or not self.redis_client:
             return False
 
         try:
-            key = f"user_queue:{user_id}"
+            source_key = self._get_source_key(source_url)
+            key = f"user_queue:{user_id}:{source_key}"
             # Store as JSON string
             self.redis_client.set(key, json.dumps(queue))
             # Set expiration to 30 days
             self.redis_client.expire(key, 30 * 24 * 60 * 60)
             return True
         except Exception as e:
-            logger.error(f"Failed to save queue for user {user_id}: {e}")
+            logger.error(f"Failed to save queue for user {user_id} source {source_url}: {e}")
             return False
 
-    def load_user_queue(self, user_id: int) -> Optional[List[str]]:
-        """Load user's shuffle queue from Redis"""
+    def load_user_queue(self, user_id: int, source_url: str) -> Optional[Dict]:
+        """Load user's shuffle queue for specific source from Redis"""
         if not self.available or not self.redis_client:
             return None
 
         try:
-            key = f"user_queue:{user_id}"
+            source_key = self._get_source_key(source_url)
+            key = f"user_queue:{user_id}:{source_key}"
             data = self.redis_client.get(key)
             if data:
                 return json.loads(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to load queue for user {user_id}: {e}")
+            logger.error(f"Failed to load queue for user {user_id} source {source_url}: {e}")
             return None
 
-    def delete_user_queue(self, user_id: int) -> bool:
-        """Delete user's shuffle queue from Redis"""
+    def delete_user_queue(self, user_id: int, source_url: str) -> bool:
+        """Delete user's shuffle queue for specific source from Redis"""
         if not self.available or not self.redis_client:
             return False
 
         try:
-            key = f"user_queue:{user_id}"
+            source_key = self._get_source_key(source_url)
+            key = f"user_queue:{user_id}:{source_key}"
             self.redis_client.delete(key)
             return True
         except Exception as e:
-            logger.error(f"Failed to delete queue for user {user_id}: {e}")
+            logger.error(f"Failed to delete queue for user {user_id} source {source_url}: {e}")
             return False
 
     def get_all_user_queues(self) -> Dict[int, List[str]]:

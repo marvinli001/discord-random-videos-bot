@@ -39,7 +39,8 @@ class VideoManager:
     def __init__(self, json_url: str):
         self.json_url = json_url
         self.all_videos: List[str] = []
-        self.user_queues: Dict[int, UserQueue] = {}  # user_id -> UserQueue
+        # Changed to support multi-source queues: {user_id: {source_url: UserQueue}}
+        self.user_queues: Dict[int, Dict[str, UserQueue]] = {}
         self.redis_storage = RedisStorage()  # Initialize Redis storage
         self._refresh_task: Optional[asyncio.Task] = None  # Background refresh task
 
@@ -62,8 +63,7 @@ class VideoManager:
                         else:
                             # Initial fetch or source switch - replace all
                             self.all_videos = new_videos
-                            # Clear existing user queues when source changes
-                            self.user_queues.clear()
+                            # Note: Don't clear user_queues - we keep queues for all sources
 
                         return True
                     else:
@@ -89,8 +89,12 @@ class VideoManager:
         if added_videos:
             logger.info(f"➕ Found {len(added_videos)} new videos")
 
-            # Add new videos to all user queues after current position
-            for user_id, user_queue in self.user_queues.items():
+            # Add new videos to all user queues for current source
+            for user_id, source_queues in self.user_queues.items():
+                # Only update queue for current source
+                if self.json_url not in source_queues:
+                    continue
+                user_queue = source_queues[self.json_url]
                 # Get remaining videos (not yet played)
                 remaining_videos = user_queue.queue[user_queue.current_index:]
 
@@ -112,8 +116,11 @@ class VideoManager:
         if removed_videos:
             logger.info(f"➖ Removed {len(removed_videos)} videos from source")
 
-            # Remove deleted videos from all user queues
-            for user_id, user_queue in self.user_queues.items():
+            # Remove deleted videos from all user queues for current source
+            for user_id, source_queues in self.user_queues.items():
+                if self.json_url not in source_queues:
+                    continue
+                user_queue = source_queues[self.json_url]
                 original_length = len(user_queue.queue)
 
                 # Filter out removed videos
@@ -133,29 +140,35 @@ class VideoManager:
         logger.info(f"✅ Video list updated: {len(self.all_videos)} total videos")
 
     def _get_user_queue(self, user_id: int) -> UserQueue:
-        """Get or create a user's queue, with Redis persistence"""
+        """Get or create a user's queue for current source, with Redis persistence"""
+        # Initialize user's source dict if not exists
         if user_id not in self.user_queues:
+            self.user_queues[user_id] = {}
+
+        # Check if queue exists for current source
+        if self.json_url not in self.user_queues[user_id]:
             # Try to load from Redis first
-            saved_data = self.redis_storage.load_user_queue(user_id)
+            saved_data = self.redis_storage.load_user_queue(user_id, self.json_url)
             if saved_data and isinstance(saved_data, dict):
                 # Restore from Redis
                 queue_data = saved_data.get("queue", [])
                 index = saved_data.get("current_index", 0)
-                logger.info(f"Restored queue for user {user_id} from Redis")
-                self.user_queues[user_id] = UserQueue(self.all_videos, queue_data, index)
+                logger.info(f"Restored queue for user {user_id} source {self.json_url} from Redis")
+                self.user_queues[user_id][self.json_url] = UserQueue(self.all_videos, queue_data, index)
             else:
-                # Create new queue
-                logger.info(f"Creating new queue for user {user_id}")
-                self.user_queues[user_id] = UserQueue(self.all_videos)
+                # Create new queue for this source
+                logger.info(f"Creating new queue for user {user_id} source {self.json_url}")
+                self.user_queues[user_id][self.json_url] = UserQueue(self.all_videos)
                 # Save to Redis
                 self._save_user_queue(user_id)
-        return self.user_queues[user_id]
+
+        return self.user_queues[user_id][self.json_url]
 
     def _save_user_queue(self, user_id: int):
-        """Save user queue to Redis"""
-        if user_id in self.user_queues:
-            queue_data = self.user_queues[user_id].to_dict()
-            self.redis_storage.save_user_queue(user_id, queue_data)
+        """Save user queue for current source to Redis"""
+        if user_id in self.user_queues and self.json_url in self.user_queues[user_id]:
+            queue_data = self.user_queues[user_id][self.json_url].to_dict()
+            self.redis_storage.save_user_queue(user_id, queue_data, self.json_url)
 
     def get_next_video(self, user_id: int) -> Optional[str]:
         """Get next video from user's queue, reshuffle when queue is exhausted"""
@@ -242,8 +255,8 @@ class VideoManager:
             logger.info("🛑 Stopped auto-refresh task")
 
     def get_queue_status(self, user_id: int) -> dict:
-        """Get user's queue status"""
-        if user_id not in self.user_queues:
+        """Get user's queue status for current source"""
+        if user_id not in self.user_queues or self.json_url not in self.user_queues[user_id]:
             return {
                 "total_videos": len(self.all_videos),
                 "queue_size": 0,
@@ -251,7 +264,7 @@ class VideoManager:
                 "videos_remaining": len(self.all_videos)
             }
 
-        user_queue = self.user_queues[user_id]
+        user_queue = self.user_queues[user_id][self.json_url]
         return {
             "total_videos": len(self.all_videos),
             "queue_size": len(user_queue.queue),

@@ -122,6 +122,13 @@ def create_video_message(video_url: str) -> str:
     """Create message content with filename and video URL for Discord embed"""
     filename = VideoManager.extract_filename(video_url)
 
+    # Remove .mp4 extension if present
+    if filename.lower().endswith('.mp4'):
+        filename = filename[:-4]
+
+    # Replace underscores with spaces
+    filename = filename.replace('_', ' ')
+
     # Discord will automatically embed the video if we include the direct link
     # We display the filename and the URL separately so Discord can create the embed
     message = f"**📹 {filename}**\n{video_url}"

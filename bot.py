@@ -32,6 +32,9 @@ class VideoBot(commands.Bot):
         if not success:
             logger.error("Failed to fetch videos on startup")
 
+        # Start auto-refresh task (every 10 minutes)
+        await self.video_manager.start_auto_refresh(interval_minutes=10)
+
         # Sync slash commands
         try:
             synced = await self.tree.sync()

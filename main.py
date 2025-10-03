@@ -66,6 +66,11 @@ class EnvFileHandler(FileSystemEventHandler):
             # Update video manager URL
             bot.video_manager.json_url = config.VIDEO_JSON_URL
             await bot.video_manager.fetch_videos()
+
+            # Restart auto-refresh task with new source
+            bot.video_manager.stop_auto_refresh()
+            await bot.video_manager.start_auto_refresh(interval_minutes=10)
+
             logger.info(f"✅ Video source updated: {config.VIDEO_JSON_URL}")
 
         except Exception as e:
@@ -113,6 +118,11 @@ async def cloud_env_monitor():
                 # Update video manager
                 bot.video_manager.json_url = config.VIDEO_JSON_URL
                 await bot.video_manager.fetch_videos()
+
+                # Restart auto-refresh task with new source
+                bot.video_manager.stop_auto_refresh()
+                await bot.video_manager.start_auto_refresh(interval_minutes=10)
+
                 logger.info(f"✅ Video source updated: {config.VIDEO_JSON_URL}")
 
         except Exception as e:

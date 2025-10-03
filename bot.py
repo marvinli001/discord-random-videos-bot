@@ -6,7 +6,6 @@ from typing import Optional
 
 from config import config
 from video_manager import VideoManager
-from tiktok_manager import TikTokManager
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +24,6 @@ class VideoBot(commands.Bot):
         )
 
         self.video_manager = VideoManager(config.VIDEO_JSON_URL)
-        self.tiktok_manager = TikTokManager(hashtag=config.TIKTOK_HASHTAG)  # Real-time search
 
     async def setup_hook(self):
         """Called when the bot is starting up"""
@@ -33,11 +31,6 @@ class VideoBot(commands.Bot):
         success = await self.video_manager.fetch_videos()
         if not success:
             logger.error("Failed to fetch videos on startup")
-
-        # Fetch TikTok videos on startup
-        tiktok_success = await self.tiktok_manager.fetch_videos()
-        if not tiktok_success:
-            logger.error("Failed to fetch TikTok videos on startup")
 
         # Start auto-refresh task (every 10 minutes)
         await self.video_manager.start_auto_refresh(interval_minutes=10)
@@ -96,18 +89,6 @@ async def randomvideo_text(ctx: commands.Context):
     await send_random_video(ctx)
 
 
-@bot.tree.command(name="randomtiktok", description="获取一个随机 TikTok 视频 (Cosplay Dance)")
-async def randomtiktok_slash(interaction: discord.Interaction):
-    """Slash command for random TikTok video"""
-    await send_random_tiktok(interaction)
-
-
-@bot.command(name="randomtiktok")
-async def randomtiktok_text(ctx: commands.Context):
-    """Text command for random TikTok video"""
-    await send_random_tiktok(ctx)
-
-
 async def send_random_video(interaction_or_ctx):
     """Send a random video with next button"""
     # Defer the response if it's an interaction
@@ -140,38 +121,6 @@ async def send_random_video(interaction_or_ctx):
         await interaction_or_ctx.send(content=content, view=view)
 
 
-async def send_random_tiktok(interaction_or_ctx):
-    """Send a random TikTok video with next button"""
-    # Defer the response if it's an interaction
-    is_interaction = isinstance(interaction_or_ctx, discord.Interaction)
-
-    if is_interaction:
-        await interaction_or_ctx.response.defer()
-
-    # Get user ID
-    user_id = interaction_or_ctx.user.id if is_interaction else interaction_or_ctx.author.id
-
-    # Get next TikTok video for this user
-    tiktok_url = bot.tiktok_manager.get_next_video(user_id)
-
-    if not tiktok_url:
-        error_msg = "❌ 无法获取 TikTok 视频，请稍后重试"
-        if is_interaction:
-            await interaction_or_ctx.followup.send(error_msg, ephemeral=True)
-        else:
-            await interaction_or_ctx.send(error_msg)
-        return
-
-    # Create message with TikTok video and button
-    view = TikTokView(tiktok_url, user_id)
-    content = create_tiktok_message(tiktok_url)
-
-    if is_interaction:
-        await interaction_or_ctx.followup.send(content=content, view=view)
-    else:
-        await interaction_or_ctx.send(content=content, view=view)
-
-
 def create_video_message(video_url: str) -> str:
     """Create message content with filename and video URL for Discord embed"""
     filename = VideoManager.extract_filename(video_url)
@@ -186,16 +135,6 @@ def create_video_message(video_url: str) -> str:
     # Discord will automatically embed the video if we include the direct link
     # We display the filename and the URL separately so Discord can create the embed
     message = f"**📹 {filename}**\n{video_url}"
-
-    return message
-
-
-def create_tiktok_message(tiktok_url: str) -> str:
-    """Create message content for TikTok video"""
-    video_id = TikTokManager.extract_video_id(tiktok_url)
-
-    # Discord will automatically embed the TikTok video (using vxtiktok.com)
-    message = f"**🎵 {video_id}**\n{tiktok_url}"
 
     return message
 
@@ -326,46 +265,6 @@ class SourceSelectionView(discord.ui.View):
         except Exception as e:
             logger.error(f"Failed to switch source: {e}")
             await interaction.followup.send("❌ 切换失败", ephemeral=True)
-
-
-class TikTokView(discord.ui.View):
-    """View with Next button for TikTok videos"""
-
-    def __init__(self, current_tiktok_url: str, user_id: int):
-        super().__init__(timeout=None)  # No timeout
-        self.current_tiktok_url = current_tiktok_url
-        self.user_id = user_id
-
-    @discord.ui.button(label="下一个", style=discord.ButtonStyle.primary, emoji="⏭️")
-    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Handle next button click"""
-        await interaction.response.defer()
-
-        # Only allow the original user to use the button
-        if interaction.user.id != self.user_id:
-            await interaction.followup.send("❌ 这不是你的 TikTok 卡片，请使用 /randomtiktok 获取自己的视频", ephemeral=True)
-            return
-
-        # Get next TikTok video for this user
-        tiktok_url = bot.tiktok_manager.get_next_video(self.user_id)
-
-        if not tiktok_url:
-            await interaction.followup.send("❌ 无法获取 TikTok 视频", ephemeral=True)
-            return
-
-        # Update the message with new TikTok video
-        self.current_tiktok_url = tiktok_url
-        content = create_tiktok_message(tiktok_url)
-
-        # Create new view with updated video
-        new_view = TikTokView(tiktok_url, self.user_id)
-
-        try:
-            # Edit the original message
-            await interaction.message.edit(content=content, view=new_view)
-        except Exception as e:
-            logger.error(f"Failed to update TikTok message: {e}")
-            await interaction.followup.send("❌ 更新失败", ephemeral=True)
 
 
 @bot.event

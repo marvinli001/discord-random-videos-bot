@@ -21,26 +21,40 @@ class RedisStorage:
     def _connect(self):
         """Connect to Redis using Railway-provided environment variables"""
         try:
-            # Railway provides REDIS_URL or individual Redis variables
-            redis_url = os.getenv('REDIS_URL')
+            # Railway provides multiple possible Redis URL variables
+            # Try in order of preference: private URL (internal), public URL, or REDIS_URL
+            redis_url = (
+                os.getenv('REDIS_PRIVATE_URL') or  # Railway internal network
+                os.getenv('REDIS_URL') or           # Generic Redis URL
+                os.getenv('REDIS_PUBLIC_URL')       # Public URL fallback
+            )
 
             if redis_url:
-                # Use REDIS_URL if available
+                # Use Redis URL if available
+                logger.info(f"Connecting to Redis via URL...")
                 self.redis_client = redis.from_url(
                     redis_url,
                     decode_responses=True,
                     socket_connect_timeout=5
                 )
             else:
-                # Fallback to individual variables (REDIS_HOST, REDIS_PORT, etc.)
-                redis_host = os.getenv('REDISHOST', 'localhost')
-                redis_port = int(os.getenv('REDISPORT', 6379))
+                # Fallback to individual variables (for local development)
+                redis_host = os.getenv('REDISHOST')
+                redis_port = os.getenv('REDISPORT')
+
+                if not redis_host or not redis_port:
+                    # No Redis configuration found
+                    logger.info("No Redis configuration found, running without persistence")
+                    self.available = False
+                    return
+
                 redis_password = os.getenv('REDISPASSWORD')
                 redis_user = os.getenv('REDISUSER', 'default')
 
+                logger.info(f"Connecting to Redis at {redis_host}:{redis_port}...")
                 self.redis_client = redis.Redis(
                     host=redis_host,
-                    port=redis_port,
+                    port=int(redis_port),
                     username=redis_user,
                     password=redis_password,
                     decode_responses=True,

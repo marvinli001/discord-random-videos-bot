@@ -50,39 +50,22 @@ class TikTokManager:
         """Initialize TikTok API (lazy loading)"""
         if self._api is None:
             try:
-                from TikTokApi import TikTokApi
+                # Try lightweight approach without Playwright
+                import aiohttp
                 import os
-                import subprocess
 
-                # Install Playwright browsers if not already installed
-                try:
-                    logger.info("📦 Checking Playwright installation...")
-                    subprocess.run(
-                        ["python", "-m", "playwright", "install", "chromium"],
-                        check=True,
-                        capture_output=True
-                    )
-                    logger.info("✅ Playwright chromium installed")
-                except Exception as install_error:
-                    logger.warning(f"Playwright install warning: {install_error}")
-
-                self._api = TikTokApi()
-                ms_token = os.getenv('TIKTOK_MS_TOKEN')  # Optional: from cookies
-
-                # Create session
-                await self._api.create_sessions(
-                    ms_tokens=[ms_token] if ms_token else [],
-                    num_sessions=1,
-                    sleep_after=3
-                )
-                logger.info("✅ TikTok API initialized")
+                self._api = "lightweight"  # Mark as initialized with lightweight mode
+                self._ms_token = os.getenv('TIKTOK_MS_TOKEN')
+                logger.info("✅ Using lightweight TikTok API (no browser required)")
             except Exception as e:
                 logger.error(f"❌ Failed to initialize TikTok API: {e}")
                 self._api = None
 
     async def fetch_videos(self, count: int = 50) -> bool:
-        """Search TikTok for videos by hashtag"""
+        """Search TikTok for videos by hashtag using lightweight API"""
         import time
+        import aiohttp
+
         current_time = time.time()
 
         # Check if we need to refresh
@@ -97,22 +80,10 @@ class TikTokManager:
                 logger.warning("⚠️  TikTok API not available, using fallback")
                 return await self._fetch_fallback()
 
-            logger.info(f"🔍 Searching TikTok hashtag: #{self.hashtag}")
+            logger.info(f"🔍 Searching TikTok hashtag: #{self.hashtag} (lightweight mode)")
 
-            videos = []
-            hashtag = self._api.hashtag(name=self.hashtag)
-
-            async for video in hashtag.videos(count=count):
-                try:
-                    # Extract video share URL
-                    video_id = video.id
-                    username = video.author.unique_id
-                    video_url = f"https://tiktok.com/@{username}/video/{video_id}"
-                    videos.append(video_url)
-                    logger.debug(f"Found TikTok video: {video_url}")
-                except Exception as e:
-                    logger.warning(f"Failed to extract video info: {e}")
-                    continue
+            # Use TikTok's web API directly (no browser needed)
+            videos = await self._fetch_via_web_api(count)
 
             if videos:
                 self.all_videos = videos
@@ -120,12 +91,58 @@ class TikTokManager:
                 logger.info(f"✅ Fetched {len(videos)} TikTok videos for #{self.hashtag}")
                 return True
             else:
-                logger.warning(f"⚠️  No videos found for #{self.hashtag}")
+                logger.warning(f"⚠️  No videos found for #{self.hashtag}, using fallback")
                 return await self._fetch_fallback()
 
         except Exception as e:
             logger.error(f"❌ Error fetching TikTok videos: {e}")
             return await self._fetch_fallback()
+
+    async def _fetch_via_web_api(self, count: int = 50) -> List[str]:
+        """Fetch TikTok videos using web API (no browser required)"""
+        import aiohttp
+        import json
+
+        videos = []
+
+        try:
+            # TikTok web API endpoint for hashtag challenge
+            url = f"https://www.tiktok.com/api/challenge/item_list/"
+
+            params = {
+                "challengeName": self.hashtag,
+                "count": count,
+                "cursor": 0
+            }
+
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Referer": f"https://www.tiktok.com/tag/{self.hashtag}"
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, headers=headers) as response:
+                    if response.status == 200:
+                        data = await response.json()
+
+                        if "itemList" in data:
+                            for item in data["itemList"][:count]:
+                                try:
+                                    video_id = item.get("id")
+                                    author = item.get("author", {}).get("uniqueId")
+                                    if video_id and author:
+                                        video_url = f"https://tiktok.com/@{author}/video/{video_id}"
+                                        videos.append(video_url)
+                                        logger.debug(f"Found video: {video_url}")
+                                except Exception as e:
+                                    continue
+                    else:
+                        logger.warning(f"Web API returned status {response.status}")
+
+        except Exception as e:
+            logger.warning(f"Web API fetch failed: {e}")
+
+        return videos
 
     async def _fetch_fallback(self) -> bool:
         """Fallback: use a default set of videos if API fails"""

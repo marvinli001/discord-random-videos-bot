@@ -52,6 +52,19 @@ class TikTokManager:
             try:
                 from TikTokApi import TikTokApi
                 import os
+                import subprocess
+
+                # Install Playwright browsers if not already installed
+                try:
+                    logger.info("📦 Checking Playwright installation...")
+                    subprocess.run(
+                        ["python", "-m", "playwright", "install", "chromium"],
+                        check=True,
+                        capture_output=True
+                    )
+                    logger.info("✅ Playwright chromium installed")
+                except Exception as install_error:
+                    logger.warning(f"Playwright install warning: {install_error}")
 
                 self._api = TikTokApi()
                 ms_token = os.getenv('TIKTOK_MS_TOKEN')  # Optional: from cookies
